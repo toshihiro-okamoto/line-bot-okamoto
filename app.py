@@ -13,7 +13,7 @@ app = Flask(__name__)
 CHANNEL_ACCESS_TOKEN = os.environ['LINE_CHANNEL_ACCESS_TOKEN']
 CHANNEL_SECRET = os.environ['LINE_CHANNEL_SECRET']
 
-DELAY = 60
+DELAY = 5
 
 # =============================
 # A/B/C ストーリーシーケンス
