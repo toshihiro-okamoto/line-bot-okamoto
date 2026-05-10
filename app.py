@@ -1,17 +1,19 @@
 from flask import Flask, request, abort
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+import requests as req
+import json
+import hmac
+import hashlib
+import base64
 import threading
 import time
 import os
 
 app = Flask(__name__)
 
-line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
-handler = WebhookHandler(os.environ['LINE_CHANNEL_SECRET'])
+CHANNEL_ACCESS_TOKEN = os.environ['LINE_CHANNEL_ACCESS_TOKEN']
+CHANNEL_SECRET = os.environ['LINE_CHANNEL_SECRET']
 
-DELAY = 60  # 各メッセージの間隔（秒）
+DELAY = 60
 
 # =============================
 # A/B/C ストーリーシーケンス
@@ -41,7 +43,6 @@ STORY_MESSAGES = {
 
 # =============================
 # プレゼント自動配信
-# キーワード → プレゼント内容（複数メッセージ）
 # =============================
 GIFT_MESSAGES = {
     '提案文': [
@@ -74,7 +75,6 @@ GIFT_MESSAGES = {
         "【修正地獄から抜け出した3つのルール】\n\n①修正回数を最初に決める\n「修正は2回まで含みます。\n3回目以降は1回5,000円いただきます。」\n\n②修正の範囲を先に決める\n「文字・色・レイアウトの微調整は含みます。\nコンセプトの変更は別料金です。」\n\n③修正は必ず文字（メール・チャット）で受け取る\n→ 口頭やLINEの口約束は\n　後でトラブルになりやすい",
         "この3つを最初の契約書に入れるだけで\n修正が止まるって言う人が多い\n\n「言い出しにくい...」って思うかもだけど\nこれを最初に言える人が\n高単価で選ばれ続ける人だよ\n\n文例とかほしい人は何でも聞いてきて！",
     ],
-    # Threads誘導キーワード（A/B/C選択フローへ戻す）
     'チェック': [
         "来てくれてありがとう\n\nスクール卒業後に案件ゼロで悩んでる人に\n使ってほしくて作ったから、ちゃんと話するね\n\nあなたが今一番詰まってるのどこ？\n教えてくれたら、あなた専用の話をするね\n\n　A と送って\n　→「提案しても選ばれない」\n\n　B と送って\n　→「スキル不足が不安でやめられない」\n\n　C と送って\n　→「何をすれば変わるかわからない\"",
     ],
@@ -86,41 +86,61 @@ GIFT_MESSAGES = {
     ],
 }
 
-# 全キーワード（ストーリー + プレゼント）
-ALL_KEYWORDS = set(STORY_MESSAGES.keys()) | set(GIFT_MESSAGES.keys())
+
+def verify_signature(body, signature):
+    hash_val = hmac.new(
+        CHANNEL_SECRET.encode('utf-8'),
+        body.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
+    return base64.b64encode(hash_val).decode('utf-8') == signature
+
+
+def push_message(user_id, text):
+    req.post(
+        'https://api.line.me/v2/bot/message/push',
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {CHANNEL_ACCESS_TOKEN}'
+        },
+        json={
+            'to': user_id,
+            'messages': [{'type': 'text', 'text': text}]
+        }
+    )
 
 
 def send_sequence(user_id, messages):
     for i, msg in enumerate(messages):
         if i > 0:
             time.sleep(DELAY)
-        line_bot_api.push_message(user_id, TextSendMessage(text=msg))
+        push_message(user_id, msg)
 
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get('X-Line-Signature', '')
     body = request.get_data(as_text=True)
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
+
+    if not verify_signature(body, signature):
         abort(400)
+
+    events = json.loads(body).get('events', [])
+    for event in events:
+        if event.get('type') == 'message' and event['message'].get('type') == 'text':
+            text = event['message']['text'].strip()
+            user_id = event['source']['userId']
+
+            if text in STORY_MESSAGES:
+                t = threading.Thread(target=send_sequence, args=(user_id, STORY_MESSAGES[text]))
+                t.daemon = True
+                t.start()
+            elif text in GIFT_MESSAGES:
+                t = threading.Thread(target=send_sequence, args=(user_id, GIFT_MESSAGES[text]))
+                t.daemon = True
+                t.start()
+
     return 'OK'
-
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    text = event.message.text.strip()
-    user_id = event.source.user_id
-
-    if text in STORY_MESSAGES:
-        t = threading.Thread(target=send_sequence, args=(user_id, STORY_MESSAGES[text]))
-        t.daemon = True
-        t.start()
-    elif text in GIFT_MESSAGES:
-        t = threading.Thread(target=send_sequence, args=(user_id, GIFT_MESSAGES[text]))
-        t.daemon = True
-        t.start()
 
 
 if __name__ == "__main__":
