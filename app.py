@@ -7,6 +7,8 @@ import base64
 import threading
 import time
 import os
+import re
+import unicodedata
 
 app = Flask(__name__)
 
@@ -87,6 +89,36 @@ GIFT_MESSAGES = {
 }
 
 
+# 句読点・装飾記号を取り除いて完全一致しなくても拾うためのマッチャー
+_DECORATION_PATTERN = re.compile(
+    r'^[\s「『""\'\'（()【\[\s]+|[\s」』""\'\'）)】\]！？!?。、,.\s]+$'
+)
+
+
+def match_keyword(text):
+    """ユーザー入力からキーワードを判定。(種別, キー) を返す。該当なしは (None, None)。"""
+    norm = unicodedata.normalize('NFKC', text).strip()
+
+    # 装飾記号を剥がして完全一致チェック
+    stripped = _DECORATION_PATTERN.sub('', norm)
+    if stripped in STORY_MESSAGES:
+        return ('story', stripped)
+    if stripped in GIFT_MESSAGES:
+        return ('gift', stripped)
+
+    # A/B/C は短いので「A と送って」「a」等を冒頭マッチで救う（大小文字許容）
+    m = re.match(r'^([ABCabc])(?:[\s、。」』）)】\]！？!?,.]|$)', norm)
+    if m and m.group(1).upper() in STORY_MESSAGES:
+        return ('story', m.group(1).upper())
+
+    # ギフトキーワードは2文字以上のみ部分一致で救う（「提案文ください」「修正お願い」など）
+    for k in sorted(GIFT_MESSAGES.keys(), key=len, reverse=True):
+        if len(k) >= 2 and k in norm:
+            return ('gift', k)
+
+    return (None, None)
+
+
 def verify_signature(body, signature):
     hash_val = hmac.new(
         CHANNEL_SECRET.encode('utf-8'),
@@ -131,16 +163,22 @@ def callback():
             text = event['message']['text'].strip()
             user_id = event['source']['userId']
 
-            if text in STORY_MESSAGES:
-                t = threading.Thread(target=send_sequence, args=(user_id, STORY_MESSAGES[text]))
+            kind, key = match_keyword(text)
+            if kind == 'story':
+                t = threading.Thread(target=send_sequence, args=(user_id, STORY_MESSAGES[key]))
                 t.daemon = True
                 t.start()
-            elif text in GIFT_MESSAGES:
-                t = threading.Thread(target=send_sequence, args=(user_id, GIFT_MESSAGES[text]))
+            elif kind == 'gift':
+                t = threading.Thread(target=send_sequence, args=(user_id, GIFT_MESSAGES[key]))
                 t.daemon = True
                 t.start()
 
     return 'OK'
+
+
+@app.route("/health", methods=['GET'])
+def health():
+    return 'OK', 200
 
 
 if __name__ == "__main__":
