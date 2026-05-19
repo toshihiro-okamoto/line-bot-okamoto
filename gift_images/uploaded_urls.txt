@@ -1,0 +1,10 @@
+gift_01_prof.png	https://i.ibb.co/yc5m7Ct7/4dfccdf9ea27.png
+gift_02_teian.png	https://i.ibb.co/BKrbFDVs/6fc6858b19b0.png
+gift_03_hassin.png	https://i.ibb.co/nsjq26VM/30dc1b8af84e.png
+gift_04_chigai.png	https://i.ibb.co/JFtdgjPL/558c64828dd6.png
+gift_05_ai_jitan.png	https://i.ibb.co/DnZpPdC/1ae24368864e.png
+gift_06_mitsumori.png	https://i.ibb.co/PsKDNr3P/915d009c222b.png
+gift_07_koushou.png	https://i.ibb.co/5XCYg197/a2e31e4da3f6.png
+gift_08_tsuki50.png	https://i.ibb.co/XQ7MC3Q/bb05793cd586.png
+gift_09_jitsuwa.png	https://i.ibb.co/yHNdwGb/96b2af46e5eb.png
+gift_10_position.png	https://i.ibb.co/TD6Ch89B/b24d09c69188.png
