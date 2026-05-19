@@ -43,6 +43,18 @@ STORY_MESSAGES = {
     ],
 }
 
+def text_msg(text):
+    return {'type': 'text', 'text': text}
+
+
+def image_msg(url):
+    return {
+        'type': 'image',
+        'originalContentUrl': url,
+        'previewImageUrl': url,
+    }
+
+
 # =============================
 # プレゼント自動配信（2026-05-19 全面差し替え・CV検証10種）
 # =============================
@@ -142,18 +154,6 @@ def push_message(user_id, message_obj):
             'messages': [message_obj]
         }
     )
-
-
-def text_msg(text):
-    return {'type': 'text', 'text': text}
-
-
-def image_msg(url):
-    return {
-        'type': 'image',
-        'originalContentUrl': url,
-        'previewImageUrl': url,
-    }
 
 
 def send_sequence(user_id, messages):
